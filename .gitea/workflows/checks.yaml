@@ -1,0 +1,15 @@
+name: checks
+on:
+  pull_request:
+  push:
+    branches: master
+jobs:
+  test:
+    runs-on: nix
+    strategy:
+      matrix:
+        arch: [x86_64-linux]
+    steps:
+      - uses: actions/checkout@v3
+      - name: test package
+        run: nix develop .#devShells.${{ matrix.arch }}.default --command make test
