@@ -13,6 +13,10 @@ build:
 test: build
 	gerbil test
 
+.PHONY: example
+example:
+	gxc -exe -o example ./example.ss
+
 .PHONY: tag
 tag:
 	git tag v$(version)

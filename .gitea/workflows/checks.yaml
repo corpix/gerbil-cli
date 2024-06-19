@@ -13,3 +13,13 @@ jobs:
       - uses: actions/checkout@v3
       - name: test package
         run: nix develop .#devShells.${{ matrix.arch }}.default --command make test
+      - name: test example
+        run: |
+          make example
+          ./example
+          ./example --help
+          ./example hello
+          ./example world
+          ./example hello -c config.yaml
+          ./example hello -c config.yaml world
+          ./example --version

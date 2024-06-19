@@ -3,7 +3,31 @@
         :std/pregexp
         (for-syntax :std/format
                     (only-in :std/srfi/1 list-index)))
-(export main)
+(export
+  current-cli-version
+  current-cli-app
+  current-cli-global-flags
+  NodeCtx
+  TypeNode
+  FlagNode
+  Flag
+  FlagsNode
+  Flags
+  CommandNode
+  Command
+  Commands
+  Cli
+  defflag-type
+  defflags
+  defcommand
+  defcli
+  String
+  Number
+  Boolean
+  ListOf
+  display-version-action
+  display-help-action
+  global-flags)
 
 (def current-cli-version (make-parameter (void)))
 (def current-cli-app (make-parameter (void)))
@@ -269,14 +293,14 @@
 (defsyntax (~defcommand-aux stx)
   (def (stx-wrap-commands acc keyword value)
     (cond
-     ((eq? keyword commands:)
+     ((eq? (syntax->datum keyword) commands:)
       (with-syntax ((commands value))
         (append acc [keyword #'(Commands list: commands)])))
      (else (append acc [keyword value]))))
   (syntax-case stx ()
     ((macro (name slots ...) proc)
      (with-syntax (((command-slots ...)
-                    (fold-n stx-wrap-commands [] (syntax->datum #'(slots ...)))))
+                    (fold-n stx-wrap-commands [] (syntax->list #'(slots ...)))))
        #'(Command
           name: name
           action: proc
@@ -290,17 +314,18 @@
 
 (defsyntax (defcli stx)
   (def (stx-split-command-arguments acc keyword value)
-    (begin0 acc
-      (let (box (cond
-                 ((or (eq? keyword name:)
-                      (eq? keyword description:))
-                  (car acc))
-                 (else (cdr acc))))
-        (set-box! box (append (unbox box) [keyword value])))))
+    (let (keyword-datum (syntax->datum keyword))
+      (begin0 acc
+        (let (box (cond
+                   ((or (eq? keyword-datum name:)
+                        (eq? keyword-datum description:))
+                    (car acc))
+                   (else (cdr acc))))
+          (set-box! box (append (unbox box) [keyword value]))))))
   (syntax-case stx ()
     ((macro (id slots ...) proc)
      (let (arguments (fold-n stx-split-command-arguments (cons (box []) (box []))
-                             (syntax->datum #'(slots ...))))
+                             (syntax->list #'(slots ...))))
        (with-syntax (((cli-slots ...) (unbox (car arguments)))
                      ((command-slots ...) (unbox (cdr arguments))))
          #'(def id (Cli cli-slots ...
@@ -405,38 +430,3 @@
    action: display-help-action))
 ;; todo: implement merge! and/or append! methods on Flags?
 (current-cli-global-flags global-flags)
-
-;;
-
-(defflags root-flags
-  ((--verbose)
-   description: "Verbose mode"
-   type: Boolean
-   value: 1))
-
-(defflags hello-flags
-  ((-c --config)
-   description: "Load configuration file"
-   value: "./config.ss"))
-
-(defcommand (hello-command flags: hello-flags
-                           description: "Say hello"
-                           name: "hello")
-  (lambda (ctx args)
-    (displayln (format "hello from hello command, args: ~a, flags: ~a"
-                       args {ctx.flags}))
-    (displayln (list 'config {ctx.flag "--config"}))
-    (displayln (list 'config-short {ctx.flag "-c"}))
-    (displayln (list 'verbose {ctx.flag "--verbose"}))
-    (displayln (list 'unknown {ctx.flag "--oops"}))))
-
-(defcli (app
-         name: "app"
-         description: "Test app"
-         flags: root-flags
-         commands: [hello-command])
-  (lambda (ctx args)
-    (displayln (format "hello from cli root, args: ~a" args))))
-
-(def (main . args)
-  {app.run! args})
