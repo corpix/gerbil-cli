@@ -7,8 +7,7 @@
 (defflags root-flags
   ((--verbose)
    description: "Verbose mode"
-   type: Boolean
-   value: 1))
+   type: Boolean))
 
 (defflags hello-flags
   ((-c --config)

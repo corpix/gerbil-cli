@@ -279,11 +279,17 @@
      (with-syntax (((flag-slots ...)
                     (fold-n (cut stx-flag-type #'macro <...>) []
                             (syntax->list #'(slots ...)))))
-       #'(Flag
-          aliases: (map symbol->string '(alias0 alias* ...))
-          type: (String)
-          value: (void)
-          flag-slots ...)))))
+       #'(let* ((flag (Flag
+                  aliases: (map symbol->string '(alias0 alias* ...))
+                  type: (String)
+                  value: (void)
+                  flag-slots ...))
+                (type (@ flag type)))
+           (begin0 flag
+             (unless (or (void? (@ flag value))
+                         {type.is? (@ flag value)})
+               (error (format "flag ~a default value ~a is not matching type ~a contract"
+                              (car (@ flag aliases)) (@ flag value) type)))))))))
 
 (defsyntax (defflags stx)
   (syntax-case stx ()
@@ -335,6 +341,8 @@
 ;;
 
 (defflag-type String)
+(defmethod {is? String}
+  (lambda (self value) (string? value)))
 (defmethod {consume String}
   (lambda (self args (parent #f))
     (values (TypeNode
@@ -343,6 +351,8 @@
             (cdr args))))
 
 (defflag-type Number)
+(defmethod {is? Number}
+  (lambda (self value) (number? value)))
 (defmethod {consume Number}
   (lambda (self args (parent #f))
     (values (TypeNode
@@ -351,6 +361,8 @@
             (cdr args))))
 
 (defflag-type Boolean)
+(defmethod {is? Boolean}
+  (lambda (self value) (boolean? value)))
 (defmethod {consume Boolean}
   (lambda (self args (parent #f))
     (values (TypeNode
@@ -359,6 +371,12 @@
             args)))
 
 (defflag-type (ListOf subtype))
+(defmethod {is? ListOf}
+  (lambda (self value)
+    (and (list? value)
+         (andmap (lambda (item)
+                   {self.subtype.is? item})
+                 value))))
 (defmethod {consume ListOf}
   (lambda (self args (parent #f))
     (let (subtype (@ self subtype))
