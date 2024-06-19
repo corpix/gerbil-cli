@@ -5,6 +5,10 @@
                     (only-in :std/srfi/1 list-index)))
 (export main)
 
+(def current-cli-version (make-parameter (void)))
+(def current-cli-app (make-parameter (void)))
+(def current-cli-global-flags (make-parameter (void)))
+
 (defclass NodeCtx (decl parent)
   transparent: #t)
 
@@ -20,7 +24,15 @@
   (lambda (self)
     (let (type-node (@ self value))
       {type-node.value})))
-(defclass Flag (aliases type usage readonly? value action)
+(defmethod {command FlagNode}
+  (lambda (self)
+    (let find-parent ((node self))
+      (let (parent (@ node ctx parent))
+        (if (or (CommandNode? parent)
+                (not parent))
+          parent
+          (find-parent parent))))))
+(defclass Flag (aliases type description usage readonly? value action)
   transparent: #t)
 (defmethod {consume Flag}
   ;; regex to:
@@ -68,8 +80,11 @@
   transparent: #t)
 (defmethod {consume Flags}
   (lambda (self args (parent #f))
-    (let ((flags (@ self list))
-          (node (FlagsNode ctx: (NodeCtx decl: self parent: parent))))
+    (let* ((global-flags (current-cli-global-flags))
+           (flags (append (if (void? global-flags) []
+                              (@ global-flags list))
+                          (@ self list)))
+           (node (FlagsNode ctx: (NodeCtx decl: self parent: parent))))
       (if (and (pair? flags) (pair? args))
         (let loop ((acc [])
                    (current (car args))
@@ -98,7 +113,11 @@
   transparent: #t)
 (defmethod {run! CommandNode}
   (lambda (self args)
-    (let (child (@ self child))
+    (let ((child (@ self child))
+          (flags (@ self flags)))
+      (for (flag (or (and flags (@ flags childs)) []))
+        (let (action (@ flag ctx decl action))
+          (and action (action flag))))
       (if child
         {child.run! args}
         (let (action (@ self ctx decl action))
@@ -131,7 +150,7 @@
         (if (and (void? flag-value) parent)
           (loop parent)
           flag-value)))))
-(defclass Command (name usage flags action commands)
+(defclass Command (name description usage flags action commands)
   transparent: #t)
 (defmethod {consume Command}
   (lambda (self args (parent #f))
@@ -189,7 +208,8 @@
 (defmethod {run! Cli}
   (lambda (self args)
     (let (command (@ self command))
-      {command.run! (cons (command-name) args)})))
+      (parameterize ((current-cli-app self))
+        {command.run! (cons (command-name) args)}))))
 
 ;;
 
@@ -329,25 +349,78 @@
 
 ;;
 
-(def current-version (make-parameter (void)))
+(def (display-version-action ctx)
+  (displayln (current-cli-version))
+  (exit 0))
+
+(def (display-help-action ctx)
+  (def command {ctx.command})
+  (def (format-flags flags)
+    (string-join (map (lambda (flag)
+                        (format "  ~a~a\t\t~a"
+                                (string-join (@ flag aliases) ", ")
+                                (if (@ flag usage) (string-append " " (@ flag usage)) "")
+                                (@ flag description))
+                        )
+                      flags)
+                 "\n"))
+  (displayln (format "\n  ~a - ~a\n\nUsage:\n  ~a ~a~a~a~a~a"
+                     (@ (current-cli-app) name)
+                     (@ (current-cli-app) description)
+                     (@ command name)
+                     (or (@ command ctx decl usage)
+                         (string-join (append (if (@ command ctx decl commands) ["[command]"] [])
+                                              (if (@ command ctx decl flags) ["[options]"] []))
+                                      " "))
+                     (if (@ command ctx decl description)
+                       (string-append "\n\n  " (@ command ctx decl description))
+                       "")
+                     (if (@ command ctx decl commands)
+                       (format "\n\nAvailable Commands:\n~a"
+                               (string-join (map (lambda (subcommand)
+                                                   (format "  ~a\t\t~a"
+                                                           (@ subcommand name)
+                                                           (or (@ subcommand description) "")))
+                                                 (@ command ctx decl commands list))
+                                            "\n"))
+                       "")
+                     (if (@ command ctx decl flags)
+                       (format "\n\nOptions:\n~a" (format-flags (@ command ctx decl flags list)))
+                       "")
+                     (if (current-cli-global-flags)
+                       (format "\n\nGlobal Options:\n~a"
+                               (format-flags (@ (current-cli-global-flags) list)))
+                       "")))
+  (exit 0))
+
+
 (defflags global-flags
   ((-v --version)
-   usage: "Show application version"
-   type: (Boolean)
-   value: (current-version)))
+   description: "Show application version"
+   type: Boolean
+   action: display-version-action)
+  ((-h --help)
+   description: "Show command line interface help"
+   type: Boolean
+   action: display-help-action))
+;; todo: implement merge! and/or append! methods on Flags?
+(current-cli-global-flags global-flags)
+
+;;
 
 (defflags root-flags
   ((--verbose)
-   usage: "Verbose mode"
+   description: "Verbose mode"
    type: Boolean
    value: 1))
 
 (defflags hello-flags
   ((-c --config)
-   usage: "Load configuration file"
+   description: "Load configuration file"
    value: "./config.ss"))
 
 (defcommand (hello-command flags: hello-flags
+                           description: "Say hello"
                            name: "hello")
   (lambda (ctx args)
     (displayln (format "hello from hello command, args: ~a, flags: ~a"
@@ -359,7 +432,7 @@
 
 (defcli (app
          name: "app"
-         description: "Description of the app"
+         description: "Test app"
          flags: root-flags
          commands: [hello-command])
   (lambda (ctx args)
