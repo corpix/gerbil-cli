@@ -15,7 +15,7 @@ jobs:
         run: nix develop .#devShells.${{ matrix.arch }}.default --command make test
       - name: test example
         run: |
-          make example
+          nix develop .#devShells.${{ matrix.arch }}.default --command make example
           ./example
           ./example --help
           ./example hello
