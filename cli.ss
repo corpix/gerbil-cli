@@ -23,7 +23,7 @@
   defcli
   String
   Number
-  Boolean
+  Bool
   ListOf
   display-version-action
   display-help-action
@@ -360,10 +360,10 @@
              value: (string->number (car args)))
             (cdr args))))
 
-(defflag-type Boolean)
-(defmethod {is? Boolean}
+(defflag-type Bool)
+(defmethod {is? Bool}
   (lambda (self value) (boolean? value)))
-(defmethod {consume Boolean}
+(defmethod {consume Bool}
   (lambda (self args (parent #f))
     (values (TypeNode
              ctx: (NodeCtx decl: self parent: parent)
@@ -440,11 +440,11 @@
 (defflags global-flags
   ((-v --version)
    description: "Show application version"
-   type: Boolean
+   type: Bool
    action: display-version-action)
   ((-h --help)
    description: "Show command line interface help"
-   type: Boolean
+   type: Bool
    action: display-help-action))
 ;; todo: implement merge! and/or append! methods on Flags?
 (current-cli-global-flags global-flags)
