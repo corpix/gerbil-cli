@@ -387,7 +387,7 @@
                            (let (((values node _)
                                   {subtype.consume [item] node}))
                              node))
-                         (string-split (car args) ",")))))
+                         (string-split (car args) #\,)))))
               (cdr args)))))
 
 ;;
