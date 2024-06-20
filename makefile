@@ -15,7 +15,7 @@ test: build
 
 .PHONY: example
 example:
-	gxc -exe -o example ./example.ss
+	gxc -V -exe -o example ./example.ss
 
 .PHONY: tag
 tag:
